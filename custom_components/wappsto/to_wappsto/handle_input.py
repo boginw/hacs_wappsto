@@ -28,6 +28,8 @@ class HandleInput(Handler):
                 step=0,
                 unit="",
                 mapping=None,
+                period="0",
+                delta="0.0",
             )
             return
 
@@ -43,6 +45,8 @@ class HandleInput(Handler):
             mapping={"0": "off", "1": "on"},
             meaningful_zero=True,
             ordered_mapping=True,
+            period="0",
+            delta="0.0",
         )
 
         def setControl(value, data):
@@ -68,3 +72,8 @@ class HandleInput(Handler):
         if not entity_id in self.valueList:
             return
         self.valueList[entity_id].report("1" if data == "on" else "0")
+
+    def removeValue(self, entity_id: str) -> None:
+        if entity_id in self.valueList:
+            self.valueList[entity_id].delete()
+            del self.valueList[entity_id]

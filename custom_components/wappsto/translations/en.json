@@ -1,38 +1,50 @@
 {
-    "config": {
-        "flow_title": "Login to create network",
-        "abort": {
-            "already_configured": "You can only have one network"
-        },
-        "error": {
-            "cannot_connect": "Failed to connect, invalid user/password",
-            "invalid_auth": "Invalid authentication",
-            "unknown": "Unexpected error"
-        },
-        "step": {
-            "user": {
-                "data": {
-                    "host": "Host",
-                    "email": "Wappsto email account",
-                    "password": "password",
-                    "username": "Username"
-                }
-            }
-        }
-    },
-    "options": {
-      "flow_title": "Select entities to send to Wappsto",
-      "error": {
-        "unknown": "Something went wrong"
-      },
-      "step": {
-        "user": {
-          "title": "Test user title",
-          "data": {
-          },
-          "description": "user description"
+  "config": {
+    "flow_title": "Wappsto: Login",
+    "step": {
+      "user": {
+        "title": "Login to Wappsto",
+        "description": "Enter your Wappsto email and password to connect your account.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
         }
       }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect. Please check your email and password.",
+      "unknown": "An unknown error occurred."
+    },
+    "abort": {
+      "already_configured": "This Wappsto account is already configured."
     }
-
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Wappsto Configuration",
+        "menu_options": {
+          "import_devices": "Add devices from Wappsto",
+          "export_entities": "Configure entities to export to Wappsto"
+        }
+      },
+      "import_devices": {
+        "title": "Add Wappsto Devices",
+        "description": "Select the devices you want to add to Home Assistant.",
+        "data": {
+          "devices_to_add": "Devices"
+        }
+      },
+      "export_entities": {
+        "title": "Select Entities to Export",
+        "description": "Choose the entities you want to export to Wappsto.",
+        "data": {
+          "entities": "Entities"
+        }
+      }
+    },
+    "abort": {
+      "no_new_devices": "No new devices were found on your Wappsto account."
+    }
+  }
 }

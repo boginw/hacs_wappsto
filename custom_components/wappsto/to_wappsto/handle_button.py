@@ -9,7 +9,7 @@ from .handler import Handler
 _LOGGER = logging.getLogger(__name__)
 
 
-class HandleDeviceTracker(Handler):
+class HandleButton(Handler):
     def __init__(self, hass: HomeAssistant) -> None:
         self.hass = hass
         self.valueList: dict[str, Value] = {}
@@ -20,8 +20,10 @@ class HandleDeviceTracker(Handler):
         self.valueList[entity_id] = device.createStringValue(
             name=entity_id,
             permission=wappstoiot.PermissionType.READ,
-            type="location",
+            type="Button",
             max=25,
+            period="0",
+            delta="0.0",
         )
 
         if initial_data:
@@ -31,3 +33,8 @@ class HandleDeviceTracker(Handler):
         if not entity_id in self.valueList:
             return
         self.valueList[entity_id].report(data)
+
+    def removeValue(self, entity_id: str) -> None:
+        if entity_id in self.valueList:
+            self.valueList[entity_id].delete()
+            del self.valueList[entity_id]

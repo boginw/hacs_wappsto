@@ -159,6 +159,8 @@ class HandleBinarySensor(Handler):
             mapping=mapping,
             meaningful_zero=True,
             ordered_mapping=True,
+            period="0",
+            delta="0.0",
         )
         if initial_data:
             self.valueList[entity_id].report("1" if initial_data == "on" else "0")
@@ -167,3 +169,8 @@ class HandleBinarySensor(Handler):
         if not entity_id in self.valueList:
             return
         self.valueList[entity_id].report("1" if data == "on" else "0")
+
+    def removeValue(self, entity_id: str) -> None:
+        if entity_id in self.valueList:
+            self.valueList[entity_id].delete()
+            del self.valueList[entity_id]

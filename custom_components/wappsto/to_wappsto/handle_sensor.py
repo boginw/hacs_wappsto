@@ -1,11 +1,12 @@
 import logging
 
+import wappstoiot
 from homeassistant import exceptions
+from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers.entity import get_device_class, get_unit_of_measurement
-from homeassistant.components.sensor import SensorDeviceClass
-import wappstoiot
-from wappstoiot import Device, Value
+from wappstoiot import Device, Value, ValueTemplate
+
 from .handler import Handler
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,18 +36,21 @@ class HandleSensor(Handler):
             return None
 
         if createString:
-            self.valueList[entity_id] = device.createStringValue(
+            # noinspection PyTypeChecker
+            self.valueList[entity_id] = device.createValue(
                 name=entity_id,
                 permission=wappstoiot.PermissionType.READ,
-                type=valType,
-                max=600,
+                value_template=ValueTemplate.STRING,
+                period="0",
+                delta="0"
             )
             if initial_data:
                 self.valueList[entity_id].report(initial_data)
-            return
+            return None
 
         measure = get_unit_of_measurement(self.hass, entity_id)
 
+        # noinspection PyTypeChecker
         self.valueList[entity_id] = device.createNumberValue(
             name=entity_id,
             permission=wappstoiot.PermissionType.READ,
@@ -55,11 +59,30 @@ class HandleSensor(Handler):
             max=100 if measure == "%" else 60000,
             step=0.001,
             unit=measure if isinstance(measure, str) else "",
+            period="0",
+            delta="0",
         )
         if initial_data:
-            self.valueList[entity_id].report(initial_data)
+            try:
+                self.valueList[entity_id].report(initial_data)
+            except ValueError:
+                _LOGGER.warning(
+                    "Initial state for sensor '%s' is non-numeric ('%s'). Skipping initial report.",
+                    entity_id,
+                    initial_data,
+                )
 
     def getReport(self, domain: str, entity_id: str, data: str, event: Event) -> None:
         if not entity_id in self.valueList:
             return
-        self.valueList[entity_id].report(data)
+        try:
+            self.valueList[entity_id].report(data)
+        except ValueError:
+            _LOGGER.warning(
+                "Could not report new state for '%s': value is '%s'.", entity_id, data
+            )
+
+    def removeValue(self, entity_id: str) -> None:
+        if entity_id in self.valueList:
+            self.valueList[entity_id].delete()
+            del self.valueList[entity_id]

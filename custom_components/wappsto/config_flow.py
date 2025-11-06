@@ -1,28 +1,19 @@
-from pathlib import Path
 import logging
-import voluptuous as vol
-from typing import Any, Dict, Optional
+from typing import Any
 
-from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
-
-from homeassistant.helpers import (
-    device_registry as dr,
-    entity_registry as er,
-)
-
+import voluptuous as vol
 from homeassistant import config_entries, exceptions
-from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.const import (
     CONF_UUID,
     CONF_EMAIL,
     CONF_PASSWORD,
 )
-from homeassistant.helpers.entity_registry import (
-    async_entries_for_config_entry,
-    async_get,
-)
+from homeassistant.core import HomeAssistant
+from homeassistant.core import callback
+from homeassistant.data_entry_flow import FlowResult
+
+from . import WappstoApi
 from .const import (
     DOMAIN,
     ENTITY_LIST,
@@ -30,7 +21,7 @@ from .const import (
     WAPPSTO_HAS_BEEN_SETUP,
     CA_CRT_KEY,
     CLIENT_CRT_KEY,
-    CLIENT_KEY_KEY,
+    CLIENT_KEY_KEY, SESSION_KEY,
 )
 from .setup_network import (
     get_session,
@@ -95,6 +86,7 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, str]:
         raise CouldNotCreate
 
     return {
+        SESSION_KEY: session,
         CONF_UUID: network_uuid,
         CA_CRT_KEY: creator["ca"],
         CLIENT_CRT_KEY: creator["certificate"],
@@ -116,8 +108,8 @@ class WappstoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
-                _LOGGER.warning("This is user_input: [%s]", user_input)
                 info = await validate_input(self.hass, user_input)
+                user_input[SESSION_KEY] = info[SESSION_KEY]
                 user_input[CA_CRT_KEY] = info[CA_CRT_KEY]
                 user_input[CLIENT_CRT_KEY] = info[CLIENT_CRT_KEY]
                 user_input[CLIENT_KEY_KEY] = info[CLIENT_KEY_KEY]
@@ -138,7 +130,7 @@ class WappstoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
+            config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
         return OptionsFlowHandler(config_entry)
@@ -154,36 +146,72 @@ class CouldNotCreate(exceptions.HomeAssistantError):
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        _LOGGER.info("Init OptionsConfigFlow")
-        self.config_entry = config_entry
+        """Initialize the options flow."""
         self.options = dict(config_entry.options)
 
     async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
+            self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage the options."""
-        _LOGGER.info("Async step init options flow [%s]", self.options)
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["import_devices", "export_entities"],
+        )
 
+    async def async_step_import_devices(
+            self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle importing devices from Wappsto."""
+        api: WappstoApi  = self.hass.data[DOMAIN][self.config_entry.entry_id]["from_wappsto"]
+
+        if user_input is not None:
+            existing_devices = self.options.get("import_devices", [])
+            newly_selected = user_input.get("devices_to_add", [])
+            self.options["import_devices"] = list(set(existing_devices + newly_selected))
+            return await self._update_options()
+
+        all_wappsto_devices = await api.get_devices()
+        configured_device_ids = self.options.get("import_devices", [])
+
+        discoverable_devices = {
+            dev_id: dev.name
+            for dev_id, dev in all_wappsto_devices.items()
+            if dev_id not in configured_device_ids
+        }
+
+        if not discoverable_devices:
+            return self.async_abort(reason="no_new_devices")
+
+        return self.async_show_form(
+            step_id="import_devices",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional("devices_to_add"): cv.multi_select(discoverable_devices),
+                }
+            ),
+        )
+
+    async def async_step_export_entities(
+            self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage the export of entities."""
         entity_id_list = {}
         for state in self.hass.states.async_all():
-            # _LOGGER.info("Testing states id: %s", state.entity_id)
-
             (entity_type, dontcare) = state.entity_id.split(".")
             if entity_type in SUPPORTED_DOMAINS:
                 entity_id_list[state.entity_id] = state.entity_id
 
         if user_input is not None:
-            _LOGGER.warning("User_input: [%s]", user_input)
             self.options.update(user_input)
             return await self._update_options()
 
         return self.async_show_form(
-            step_id="init",
+            step_id="export_entities",
             data_schema=vol.Schema(
                 {
                     vol.Required(
                         ENTITY_LIST,
-                        default=list(self.options[ENTITY_LIST]),  # type: ignore list is a valid type
+                        default=list(self.options.get(ENTITY_LIST, [])),
                     ): cv.multi_select(sorted(entity_id_list)),
                 }
             ),

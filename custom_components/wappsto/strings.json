@@ -1,40 +1,47 @@
 {
-    "config": {
-      "step": {
-        "user": {
-          "data": {
-            "host": "[%key:common::config_flow::data::host%]",
-            "username": "[%key:common::config_flow::data::username%]",
-            "password": "[%key:common::config_flow::data::password%]"
-          }
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "email": "[%key:common::config_flow::data::email%]",
+          "password": "[%key:common::config_flow::data::password%]"
         }
-      },
-      "error": {
-        "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
-        "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
-        "unknown": "[%key:common::config_flow::error::unknown%]"
-      },
-      "abort": {
-        "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
       }
     },
-    "options": {
-        "flow_title": "[%key:common::options::flow_title%]",
-        "title": "[%key:common::options::title%]",
-      "error": {
-        "unknown": "Something went wrong"
+    "error": {
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    },
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "wappsto.options.step.init.title",
+        "menu_options": {
+          "import_devices": "wappsto.options.step.init.menu_options.import_devices",
+          "export_entities": "wappsto.options.step.init.menu_options.export_entities"
+        }
       },
-      "step": {
-        "init": {
-          "title": "Test init title",
-          "description": "user description"
-        },
-        "user": {
-          "title": "Test user title",
-          "data": {
-          },
-          "description": "user description"
+      "import_devices": {
+        "title": "wappsto.options.step.import_devices.title",
+        "description": "wappsto.options.step.import_devices.description",
+        "data": {
+          "devices_to_add": "wappsto.options.step.import_devices.data.devices_to_add"
+        }
+      },
+      "export_entities": {
+        "title": "wappsto.options.step.export_entities.title",
+        "description": "wappsto.options.step.export_entities.description",
+        "data": {
+          "entities": "wappsto.options.step.export_entities.data.entities"
         }
       }
+    },
+    "abort": {
+      "no_new_devices": "wappsto.options.abort.no_new_devices"
     }
   }
+}

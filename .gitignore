@@ -5,3 +5,7 @@ venv
 .coverage
 .idea
 .storage
+config
+ca.crt
+client.crt
+client.key

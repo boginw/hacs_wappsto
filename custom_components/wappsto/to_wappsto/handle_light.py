@@ -58,6 +58,8 @@ class HandleLight(Handler):
                 permission=wappstoiot.PermissionType.READWRITE,
                 max=10,
                 encoding="hex",
+                period="0",
+                delta="0.0",
             )
         else:
             _LOGGER.warning("Entiry [%s] has no support for color")
@@ -118,6 +120,8 @@ class HandleLight(Handler):
                 max=int(maxKelvin) if maxKelvin else 0,
                 step=1,
                 unit="kelvin",
+                period="0",
+                delta="0.0",
             )
 
             def setControl(value, data):
@@ -150,6 +154,8 @@ class HandleLight(Handler):
                     max=int(maxReds) if maxReds else 0,
                     step=1,
                     unit="mireds",
+                    period="0",
+                    delta="0.0",
                 )
 
     def createBrightnessValue(self, device: Device, entity_id: str, state: State):
@@ -201,6 +207,8 @@ class HandleLight(Handler):
                 max=max_length,
                 step=1,
                 unit="",
+                period="0",
+                delta="0.0",
             )
             self.valueList[entity_id][BRIGHTNESS_VALUE].report(start_brightness)
             self.valueList[entity_id][BRIGHTNESS_VALUE].control(start_brightness)
@@ -254,6 +262,8 @@ class HandleLight(Handler):
             mapping={"0": "off", "1": "on"},
             meaningful_zero=True,
             ordered_mapping=True,
+            period="0",
+            delta="0.0",
         )
 
         def setControl(value, data):
@@ -326,3 +336,9 @@ class HandleLight(Handler):
             self.valueList[entity_id][COLOR_VALUE].report(
                 self.convert_rgb_to_hex(rgb_color)
             )
+
+    def removeValue(self, entity_id: str) -> None:
+        if entity_id in self.valueList:
+            for value in self.valueList[entity_id].values():
+                value.delete()
+            del self.valueList[entity_id]

@@ -24,6 +24,7 @@ This is a custom integration!
 If you have any issues with this you need to do stufff
 -------------------------------------------------------------------
 """
+SESSION_KEY = "session"
 CA_CRT_KEY = "ca"
 CLIENT_CRT_KEY = "certificate"
 CLIENT_KEY_KEY = "private_key"

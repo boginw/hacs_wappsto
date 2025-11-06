@@ -5,14 +5,16 @@
         "http"
     ],
     "codeowners": [
-        "@KarstenTonnesenSeluxit"
+        "@boginw"
     ],
     "config_flow": true,
-    "documentation": "https://github.com/KarstenTonnesenSeluxit/hacs_wappsto/blob/main/README.md",
+    "documentation": "https://github.com/wappsto/hacs_wappsto/blob/main/README.md",
     "iot_class": "cloud_push",
-    "issue_tracker": "https://github.com/KarstenTonnesenSeluxit/hacs_wappsto/issues",
+    "issue_tracker": "https://github.com/wappsto/hacs_wappsto/issues",
     "requirements": [
-        "wappstoiot"
+        "wappstoiot",
+        "requests",
+        "websockets"
     ],
-    "version": "0.0.1"
+    "version": "0.1.0"
 }

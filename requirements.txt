@@ -1,2 +1,6 @@
-async-retrying==0.2.2
-
+aiohttp==3.13.2
+requests==2.32.5
+websockets==15.0.1
+voluptuous==0.15.2
+homeassistant==2025.10.4
+wappstoiot==0.8.0

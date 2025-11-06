@@ -26,7 +26,7 @@ from homeassistant.helpers import (
 
 _LOGGER = logging.getLogger(__name__)
 
-from .const import (
+from ..const import (
     SUPPORTED_DOMAINS,
     INPUT_BOOLEAN,
     INPUT_BUTTON,
@@ -35,9 +35,9 @@ from .const import (
     SENSOR,
     SWITCH,
     BUTTON,
-    DEVICE_TRACKER,
+    DEVICE_TRACKER, SESSION_KEY, ENTITY_LIST,
 )
-from .binary_sensor import wappsto_connected_sensor
+from ..binary_sensor import wappsto_connected_sensor
 from .handle_input import HandleInput
 from .handle_binary_sensor import HandleBinarySensor
 from .handle_light import HandleLight
@@ -47,11 +47,15 @@ from .handle_button import HandleButton
 from .handle_device_tracker import HandleDeviceTracker
 
 
-class WappstoApi:
-    def __init__(self, hass: HomeAssistant, entity_list: list) -> None:
+class WappstoIoTApi:
+    entity_list: list = []
+    session: str = ""
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         _LOGGER.info("TESTING WAPPSTO API __INIT__")
         self.hass = hass
-        self.entity_list = entity_list
+        self.entity_list = entry.options[ENTITY_LIST]
+        self.session = entry.data[SESSION_KEY]
         self.valueList = {}
         self.deviceList = {}
         self.handle_input = HandleInput(self.hass)
@@ -73,7 +77,7 @@ class WappstoApi:
         self.handlerDomain[DEVICE_TRACKER] = self.handle_device_tracker
 
         wappstoiot.config(
-            config_folder=Path(__file__).parent,
+            config_folder=Path(__file__).parent.parent,
             fast_send=False,
         )
         self.network = wappstoiot.createNetwork(name="HomeAssistant")
@@ -88,7 +92,7 @@ class WappstoApi:
 
         def event_ha_started(event):
             _LOGGER.info("HA started event")
-            for values in entity_list:
+            for values in self.entity_list:
                 self.createValue(values)
 
         hass.bus.async_listen(event_type=EVENT_STATE_CHANGED, listener=event_handler)

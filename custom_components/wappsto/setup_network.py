@@ -1,6 +1,7 @@
 import json
-from pathlib import Path
 import logging
+from pathlib import Path
+
 import requests
 
 from .const import (
@@ -13,7 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def get_session(username, password):
-    session_json = {"username": username, "password": password, "remember_me": False}
+    session_json = {"username": username, "password": password, "remember_me": True}
 
     url = f"https://wappsto.com/services/session"
     headers = {"Content-type": "application/json"}
