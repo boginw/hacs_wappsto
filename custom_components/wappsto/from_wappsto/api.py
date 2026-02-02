@@ -174,9 +174,11 @@ class WappstoApi:
 
         return self.wappsto_devices
 
-    async def start_websocket(self):
+    async def start_websocket(self, import_devices):
         """Start the WebSocket connection."""
-        url = f"wss://wappsto.com/services/2.1/websocket/open?X-Session={self.session}&subscription=[/network]"
+
+        subscription = ','.join([f"/device/{device_id}" for device_id in import_devices])
+        url = f"wss://wappsto.com/services/2.1/websocket/open?X-Session={self.session}&subscription=[{subscription}]"
         ssl_context = await self.hass.async_add_executor_job(ssl.create_default_context)
         while True:
             try:

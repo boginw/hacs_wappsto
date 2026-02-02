@@ -66,7 +66,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     if platforms:
         await hass.config_entries.async_forward_entry_setups(entry, platforms)
 
-    hass.async_create_task(from_wappsto_api.start_websocket())
+    hass.async_create_task(from_wappsto_api.start_websocket(entry.options.get("import_devices")))
 
     entry.async_on_unload(entry.add_update_listener(update_listener))
     return True
