@@ -57,6 +57,7 @@ class WappstoSwitch(SwitchEntity):
         self._wappsto_api = wappsto_api
         self._device = device
         self._value = value
+        self._update_callback = None
         self._attr_name = f"{device.name} {value.name}"
         self._attr_unique_id = f"{value.wappsto_id}"
 
@@ -72,7 +73,9 @@ class WappstoSwitch(SwitchEntity):
     @property
     def is_on(self) -> bool | None:
         """Return true if the switch is on."""
-        return self._value.data == "1"
+        return self._wappsto_api.get_value_data(
+            self._value.wappsto_id, self._value.data
+        ) == "1"
 
     async def async_turn_on(self, **kwargs) -> None:
         """Turn the switch on."""
@@ -88,12 +91,14 @@ class WappstoSwitch(SwitchEntity):
         def _update_callback():
             self.async_write_ha_state()
 
+        self._update_callback = _update_callback
         self._wappsto_api.register_update_callback(
-            self._value.wappsto_id, _update_callback
+            self._value.wappsto_id, self._update_callback
         )
 
     async def async_will_remove_from_hass(self) -> None:
         """Unregister callbacks."""
-        self._wappsto_api.unregister_update_callback(
-            self._value.wappsto_id, lambda: self.async_write_ha_state()
-        )
+        if self._update_callback is not None:
+            self._wappsto_api.unregister_update_callback(
+                self._value.wappsto_id, self._update_callback
+            )

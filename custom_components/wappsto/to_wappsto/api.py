@@ -52,7 +52,6 @@ class WappstoIoTApi:
     session: str = ""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        _LOGGER.info("TESTING WAPPSTO API __INIT__")
         self.hass = hass
         self.entity_list = entry.options[ENTITY_LIST]
         self.session = entry.data[SESSION_KEY]
@@ -76,6 +75,17 @@ class WappstoIoTApi:
         self.handlerDomain[BUTTON] = self.handle_button
         self.handlerDomain[DEVICE_TRACKER] = self.handle_device_tracker
 
+    @classmethod
+    async def async_create(cls, hass: HomeAssistant, entry: ConfigEntry) -> "WappstoIoTApi":
+        """Create and initialize the Wappsto IoT API."""
+        api = cls(hass, entry)
+        await hass.async_add_executor_job(api._initialize_wappsto)
+        api._register_event_listeners()
+        wappsto_connected_sensor.turn_on()
+        return api
+
+    def _initialize_wappsto(self) -> None:
+        """Initialize the Wappsto SDK outside the event loop."""
         wappstoiot.config(
             config_folder=Path(__file__).parent.parent,
             fast_send=False,
@@ -83,33 +93,27 @@ class WappstoIoTApi:
         self.network = wappstoiot.createNetwork(name="HomeAssistant")
         self.temp_device = self.network.createDevice("Default device")
 
+    def _register_event_listeners(self) -> None:
+        """Register Home Assistant event listeners."""
         def event_handler(event):
             self.handleEvent(event)
-
-        def event_started(event):
-            domain = event.data["domain"]
-            _LOGGER.warning("Event started, domain: %s [%s]", domain, event)
 
         def event_ha_started(event):
             _LOGGER.info("HA started event")
             for values in self.entity_list:
                 self.createValue(values)
 
-        hass.bus.async_listen(event_type=EVENT_STATE_CHANGED, listener=event_handler)
-        hass.bus.async_listen(  # NOTE: et it to work to create the value!!
-            event_type=EVENT_SERVICE_REGISTERED, listener=event_started
-        )
+        self.hass.bus.async_listen(event_type=EVENT_STATE_CHANGED, listener=event_handler)
 
-        hass.bus.async_listen_once(
+        self.hass.bus.async_listen_once(
             EVENT_HOMEASSISTANT_STARTED,
             event_ha_started,
         )
 
-        hass.bus.async_listen(
+        self.hass.bus.async_listen(
             event_type=EVENT_HOMEASSISTANT_STOP,
             listener=lambda *args, **kwargs: wappstoiot.close(),
         )
-        wappsto_connected_sensor.turn_on()
 
     def close(self):
         wappstoiot.close()
@@ -121,7 +125,10 @@ class WappstoIoTApi:
 
     def handleEvent(self, event):
         entity_id = event.data.get("entity_id", "")
-        _LOGGER.info("Event id: %s [%s]", entity_id, event)
+        if "." not in entity_id:
+            return
+
+        _LOGGER.debug("Event id: %s [%s]", entity_id, event)
         (entity_type, entity_name) = entity_id.split(".")
         if entity_type in SUPPORTED_DOMAINS:
             self.updateValueReport(entity_id, event)
@@ -162,7 +169,7 @@ class WappstoIoTApi:
             current_entity = self.hass.states.get(entity_id)
             initial_data = None
             if current_entity:
-                _LOGGER.info(
+                _LOGGER.debug(
                     "Set initial report[%s]:[%s]", entity_id, current_entity.state
                 )
                 initial_data = current_entity.state

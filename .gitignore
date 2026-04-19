@@ -9,3 +9,4 @@ config
 ca.crt
 client.crt
 client.key
+.codex

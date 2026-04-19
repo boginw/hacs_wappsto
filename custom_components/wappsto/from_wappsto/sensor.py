@@ -77,6 +77,7 @@ class WappstoSensor(SensorEntity):
         self._wappsto_api = wappsto_api
         self._device = device
         self._value = value
+        self._update_callback = None
         self._attr_name = f"{device.name} {value.name}"
         self._attr_unique_id = f"{value.wappsto_id}"
         self._attr_device_class = WAPPSTO_VALUE_TYPE_TO_DEVICE_CLASS.get(value.type)
@@ -94,9 +95,10 @@ class WappstoSensor(SensorEntity):
     @property
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
-        if self._value.data == "":
+        data = self._wappsto_api.get_value_data(self._value.wappsto_id, self._value.data)
+        if data == "":
             return None
-        return self._value.data
+        return data
 
     async def async_added_to_hass(self) -> None:
         """Register callbacks."""
@@ -104,8 +106,10 @@ class WappstoSensor(SensorEntity):
         def _update_callback():
             self.async_write_ha_state()
 
-        self._wappsto_api.register_update_callback(self._value.wappsto_id, _update_callback)
+        self._update_callback = _update_callback
+        self._wappsto_api.register_update_callback(self._value.wappsto_id, self._update_callback)
 
     async def async_will_remove_from_hass(self) -> None:
         """Unregister callbacks."""
-        self._wappsto_api.unregister_update_callback(self._value.wappsto_id, lambda: self.async_write_ha_state())
+        if self._update_callback is not None:
+            self._wappsto_api.unregister_update_callback(self._value.wappsto_id, self._update_callback)

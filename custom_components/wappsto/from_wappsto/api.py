@@ -22,8 +22,11 @@ class WappstoApi:
         self.entry = entry
         self.session = entry.data["session"]
         self.wappsto_devices: dict[str, WappstoDevice] = {}
+        self._device_fetch_tasks: dict[str, asyncio.Task[WappstoDevice]] = {}
         self._update_callbacks: dict[str, list] = {}
+        self._latest_values: dict[str, str] = {}
         self.websocket_task = None
+        self._stopped = False
 
     async def get_devices(self) -> dict[str, WappstoDevice]:
         """Fetch Wappsto devices and values."""
@@ -48,12 +51,27 @@ class WappstoApi:
 
     async def get_device(self, device_id) -> WappstoDevice:
         """Fetch Wappsto devices and values."""
+        if device_id in self.wappsto_devices:
+            return self.wappsto_devices[device_id]
+
+        if device_id in self._device_fetch_tasks:
+            return await self._device_fetch_tasks[device_id]
+
+        task = self.hass.async_create_task(self._fetch_device(device_id))
+        self._device_fetch_tasks[device_id] = task
+        try:
+            return await task
+        finally:
+            self._device_fetch_tasks.pop(device_id, None)
+
+    async def _fetch_device(self, device_id: str) -> WappstoDevice:
+        """Fetch a Wappsto device from the API."""
 
         url = f"https://wappsto.com/services/2.1/device/{device_id}?expand=2"
         headers = {"X-session": self.session}
 
         async with aiohttp.ClientSession() as session:
-            _LOGGER.warning("Fetching Wappsto Device: " + device_id + "")
+            _LOGGER.info("Fetching Wappsto Device: %s", device_id)
             async with session.get(url, headers=headers) as resp:
                 device_data = await resp.json()
                 device = WappstoDevice(
@@ -96,6 +114,8 @@ class WappstoApi:
                         state_read=state_read,
                         state_write=state_write,
                     )
+                    if value_id in self._latest_values:
+                        value.data = self._latest_values[value_id]
                     device.values[value_id] = value
 
                 self.wappsto_devices[device_id] = device
@@ -176,39 +196,96 @@ class WappstoApi:
 
     async def start_websocket(self, import_devices):
         """Start the WebSocket connection."""
+        if not import_devices:
+            _LOGGER.info("No Wappsto devices configured for websocket import")
+            return
 
+        self._stopped = False
         subscription = ','.join([f"/device/{device_id}" for device_id in import_devices])
         url = f"wss://wappsto.com/services/2.1/websocket/open?X-Session={self.session}&subscription=[{subscription}]"
         ssl_context = await self.hass.async_add_executor_job(ssl.create_default_context)
-        while True:
+        while not self._stopped:
             try:
-                async with websockets.connect(url, ssl=ssl_context) as websocket:
+                async with websockets.connect(
+                    url,
+                    ssl=ssl_context,
+                    ping_interval=20,
+                    ping_timeout=20,
+                    close_timeout=10,
+                ) as websocket:
                     _LOGGER.info("Connected to Wappsto WebSocket")
-                    while True:
+                    while not self._stopped:
                         message = await websocket.recv()
-                        data = json.loads(message)
-                        if data.get("event") == "update" and data.get("data"):
+                        try:
+                            data = json.loads(message)
+                            if data.get("event") != "update" or not data.get("data"):
+                                continue
+
                             if data["data"].get("data") is None:
+                                continue
+
+                            path_parts = data.get("path", "").split("/")
+                            if len(path_parts) < 7:
+                                _LOGGER.warning("Ignoring Wappsto update with unexpected path: %s", data.get("path"))
                                 continue
 
                             new_data = data["data"]["data"]
                             # /network/<network-id>/device/<device-id>/value/<value-id>/state/<state-id>
-                            value_id = data["path"].split("/")[6]
+                            value_id = path_parts[6]
                             self._on_wappsto_update(value_id, new_data)
-            except (websockets.exceptions.ConnectionClosedError, asyncio.TimeoutError):
+                        except (KeyError, IndexError, TypeError, json.JSONDecodeError):
+                            _LOGGER.exception("Failed to process Wappsto websocket message: %s", message)
+            except asyncio.CancelledError:
+                _LOGGER.info("Wappsto WebSocket task cancelled")
+                raise
+            except (
+                websockets.exceptions.ConnectionClosed,
+                websockets.exceptions.WebSocketException,
+                asyncio.TimeoutError,
+            ):
+                if self._stopped:
+                    break
                 _LOGGER.warning("Wappsto WebSocket connection lost. Reconnecting in 10 seconds.")
                 await asyncio.sleep(10)
+            except Exception:
+                if self._stopped:
+                    break
+                _LOGGER.exception("Unexpected Wappsto websocket failure. Reconnecting in 10 seconds.")
+                await asyncio.sleep(10)
+
+    async def async_close(self) -> None:
+        """Stop the websocket task."""
+        self._stopped = True
+        if self.websocket_task is not None:
+            self.websocket_task.cancel()
+            try:
+                await self.websocket_task
+            except asyncio.CancelledError:
+                pass
+            self.websocket_task = None
 
     def _on_wappsto_update(self, value_id, data):
         """Handle update from Wappsto."""
-        _LOGGER.warning("Received update for %s: %s", value_id, data)
+        _LOGGER.info("Received update for %s: %s", value_id, data)
+        self._latest_values[value_id] = data
         for device in self.wappsto_devices.values():
             if value := device.get_value(value_id):
                 value.data = data
-                if value_id in self._update_callbacks:
-                    for callback in self._update_callbacks[value_id]:
-                        callback()
-                break
+
+        if value_id in self._update_callbacks:
+            for callback in list(self._update_callbacks[value_id]):
+                callback()
+
+    def get_value_data(self, value_id: str, fallback: str | None = None) -> str | None:
+        """Return the latest known value data for a Wappsto value."""
+        if value_id in self._latest_values:
+            return self._latest_values[value_id]
+
+        for device in self.wappsto_devices.values():
+            if value := device.get_value(value_id):
+                return value.data
+
+        return fallback
 
     def register_update_callback(self, value_id: str, callback) -> None:
         """Register a callback for value updates."""

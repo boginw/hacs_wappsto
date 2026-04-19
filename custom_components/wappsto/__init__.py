@@ -1,4 +1,5 @@
 """The Wappsto integration."""
+import asyncio
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -50,7 +51,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     _LOGGER.info("STARTUP config: [%s]", entry.options)
     entry.async_on_unload(entry.add_update_listener(update_listener))
 
-    to_wappsto_api = WappstoIoTApi(hass, entry)
+    to_wappsto_api = await WappstoIoTApi.async_create(hass, entry)
     from_wappsto_api = WappstoApi(hass, entry)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
@@ -66,7 +67,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     if platforms:
         await hass.config_entries.async_forward_entry_setups(entry, platforms)
 
-    hass.async_create_task(from_wappsto_api.start_websocket(entry.options.get("import_devices")))
+    from_wappsto_api.websocket_task = asyncio.create_task(
+        from_wappsto_api.start_websocket(entry.options.get("import_devices"))
+    )
 
     entry.async_on_unload(entry.add_update_listener(update_listener))
     return True
@@ -81,10 +84,25 @@ async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
     _LOGGER.info("Async_unload_entry - disconnect and clear certificates")
-    wappstoApi: WappstoIoTApi = hass.data[DOMAIN][entry.entry_id]["to_wappsto"]
+    entry_data = hass.data[DOMAIN][entry.entry_id]
+    wappstoApi: WappstoIoTApi = entry_data["to_wappsto"]
+    from_wappsto_api: WappstoApi = entry_data["from_wappsto"]
     wappstoApi.close()
+    await from_wappsto_api.async_close()
+
+    platforms = []
+    if entry.options.get("import_devices"):
+        platforms.extend([Platform.SENSOR, Platform.SWITCH])
+
+    unload_ok = True
+    if platforms:
+        unload_ok = await hass.config_entries.async_unload_platforms(entry, platforms)
+
+    if unload_ok:
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+
     delete_certificate_files()
-    return True
+    return unload_ok
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
